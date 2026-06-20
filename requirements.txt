@@ -1,0 +1,9 @@
+flask
+flask-cors
+yfinance
+python-telegram-bot
+matplotlib
+pandas
+openpyxl
+lxml
+requests
