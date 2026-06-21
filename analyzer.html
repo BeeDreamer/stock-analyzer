@@ -1130,20 +1130,26 @@ function buildCmpTable(a, b) {
   // ── форматирование ────────────────────────────────────────────────────────
   const f   = (v, d=1) => v == null ? '—' : Number(v).toLocaleString('ru-RU', {maximumFractionDigits:d});
   const fp  = (v, d=1) => v == null ? '—' : (v*100).toLocaleString('ru-RU', {maximumFractionDigits:d}) + '%';
-  const chg = v => v == null ? '—' : (v>=0?'<span style="color:var(--green)">+':'<span style="color:var(--red)">') +
-                   (v*100).toFixed(2) + '%</span>';
+  const chg = v => {
+    if (v == null) return '—';
+    // Дневное изменение не может быть > 50% — если Yahoo вернул мусор, прячем
+    if (Math.abs(v) > 0.5) return '<span style="color:var(--txt-mute);font-size:11px">н/д за день</span>';
+    return (v>=0?'<span style="color:var(--green)">+':'<span style="color:var(--red)">') +
+           (v*100).toFixed(2) + '% за день</span>';
+  };
   const bn  = v => {
     if (v == null) return '—';
     if (Math.abs(v) >= 1e12) return (v/1e12).toFixed(1) + ' трлн';
     if (Math.abs(v) >= 1e9)  return (v/1e9).toFixed(1)  + ' млрд';
     return (v/1e6).toFixed(0) + ' млн';
   };
-  // % разница относительно B: показывает насколько A лучше/хуже
+  // % разница: только когда оба значения положительные и разница ≤ 200%
   const delta = (va, vb, higherBetter) => {
     if (va == null || vb == null || vb === 0) return '';
+    if (va < 0 || vb < 0) return '';          // отрицательные — бессмыслица
     const pct = ((va - vb) / Math.abs(vb) * 100);
+    if (Math.abs(pct) < 2 || Math.abs(pct) > 200) return '';  // слишком мало или огромная
     const better = higherBetter ? pct > 0 : pct < 0;
-    if (Math.abs(pct) < 1) return '';
     return `<span style="font-size:10px;margin-left:4px;color:${better?'var(--green)':'var(--red)'}">${pct>0?'+':''}${pct.toFixed(0)}%</span>`;
   };
 
@@ -1253,9 +1259,10 @@ function buildCmpTable(a, b) {
   </tr>`;
 
   // ── 2. Оценка ─────────────────────────────────────────────────────────────
+  const fpe = v => v == null ? '—' : v < 0 ? '<span style="color:var(--txt-mute);font-size:11px">убыток</span>' : f(v,1);
   html += sep('📊 Оценка');
-  html += row('P/E (тек.)',      a.pe,         b.pe,         false, v=>f(v,1));
-  html += row('P/E (форвард.)',  a.forwardPe,  b.forwardPe,  false, v=>f(v,1));
+  html += row('P/E (тек.)',      a.pe,         b.pe,         false, fpe);
+  html += row('P/E (форвард.)',  a.forwardPe,  b.forwardPe,  false, fpe);
   html += row('PEG',            a.peg,        b.peg,        false, v=>f(v,2));
   html += row('Beta',           a.beta,       b.beta,       false, v=>f(v,2));
 
