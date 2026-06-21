@@ -1132,8 +1132,8 @@ function buildCmpTable(a, b) {
   const fp  = (v, d=1) => v == null ? '—' : (v*100).toLocaleString('ru-RU', {maximumFractionDigits:d}) + '%';
   const chg = v => {
     if (v == null) return '—';
-    // Дневное изменение не может быть > 50% — если Yahoo вернул мусор, прячем
-    if (Math.abs(v) > 0.5) return '<span style="color:var(--txt-mute);font-size:11px">н/д за день</span>';
+    // Бэкенд уже фильтрует мусор, но страхуемся
+    if (Math.abs(v) > 0.25) return '<span style="color:var(--txt-mute);font-size:11px">н/д</span>';
     return (v>=0?'<span style="color:var(--green)">+':'<span style="color:var(--red)">') +
            (v*100).toFixed(2) + '% за день</span>';
   };

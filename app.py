@@ -91,6 +91,19 @@ def build_quarters(tk):
     return rows, beats
 
 
+def _calc_change(info: dict):
+    """Вычисляем изменение за день сами — regularMarketChangePercent от yfinance
+    часто возвращает мусор для европейских акций."""
+    price = info.get("currentPrice") or info.get("regularMarketPrice")
+    prev  = info.get("previousClose") or info.get("regularMarketPreviousClose")
+    if price and prev and prev != 0:
+        chg = (price - prev) / prev
+        # Санитарная проверка: дневное изменение > 25% — скорее всего мусор
+        if abs(chg) <= 0.25:
+            return chg
+    return None
+
+
 @app.route("/")
 def index():
     return send_from_directory(".", "analyzer.html")
@@ -313,7 +326,7 @@ def analyze(ticker):
             "currency": g(info, "currency") or "",
             "exchange": g(info, "fullExchangeName", "exchange") or "",
             "price": g(info, "currentPrice", "regularMarketPrice"),
-            "changePercent": g(info, "regularMarketChangePercent"),
+            "changePercent": _calc_change(info),
             "marketCap": mcap,
             "capClass": cap_class(mcap),
             "pe": pe,
@@ -367,7 +380,7 @@ def chart_data(ticker, period):
         tk = yf.Ticker(ticker)
         hist = tk.history(period=p, interval=ivl)
         if hist.empty:
-            return jsonify({"error": "Нет исторических данных"}), 404
+            return jsonify({"error": "Net istoricheskikh dannykh"}), 404
         data = []
         for idx, row in hist.iterrows():
             data.append({
@@ -382,5 +395,4 @@ def chart_data(ticker, period):
 
 
 if __name__ == "__main__":
-    print(f"\n  Анализатор акций → http://localhost:{PORT}\n")
     app.run(host="0.0.0.0", port=PORT, debug=False)
