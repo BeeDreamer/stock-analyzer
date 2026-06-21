@@ -25,7 +25,10 @@
   body{
     background:radial-gradient(1200px 600px at 70% -10%, #16302a 0%, var(--bg) 55%) fixed;
     color:var(--txt); font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
-    line-height:1.5; padding:28px 18px 60px; min-height:100vh;
+    line-height:1.5; min-height:100vh;
+    padding: calc(28px + env(safe-area-inset-top)) 18px calc(60px + env(safe-area-inset-bottom));
+    padding-left:  calc(18px + env(safe-area-inset-left));
+    padding-right: calc(18px + env(safe-area-inset-right));
   }
   .wrap{max-width:920px;margin:0 auto}
   header{margin-bottom:26px}
@@ -134,6 +137,48 @@
   #chart-loader{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
     background:rgba(19,38,34,.75);border-radius:8px;font-size:13px;color:var(--txt-dim)}
   footer{text-align:center;font-size:11px;color:var(--txt-mute);margin-top:30px;line-height:1.7}
+
+  /* ── Главные вкладки ─────────────────────────────────────────────────── */
+  .main-tabs{display:flex;gap:8px;margin:18px 0 4px}
+  .mtab{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);
+    padding:10px 22px;color:var(--txt-dim);font-size:14px;font-weight:600;cursor:pointer;transition:all .2s}
+  .mtab:hover{border-color:var(--teal);color:var(--teal)}
+  .mtab.active{background:var(--teal);color:#04110e;border-color:var(--teal)}
+
+  /* ── Скринер ────────────────────────────────────────────────────────── */
+  .scr-block{margin-bottom:20px}
+  .scr-label{font-size:11px;text-transform:uppercase;letter-spacing:.8px;color:var(--txt-mute);margin-bottom:10px}
+  .scr-btns{display:flex;flex-wrap:wrap;gap:8px}
+  .scr-btn{background:var(--panel);border:1px solid var(--line);border-radius:10px;
+    padding:9px 16px;color:var(--txt-dim);font-size:13px;font-weight:600;cursor:pointer;transition:all .2s}
+  .scr-btn:hover{border-color:var(--teal);color:var(--teal)}
+  .scr-btn.active{background:var(--teal);border-color:var(--teal);color:#04110e}
+  .scr-btn .cnt{font-size:11px;opacity:.75;margin-left:4px}
+  #screen-run-btn{width:100%;background:var(--teal);border:none;border-radius:var(--r);
+    padding:14px;color:#04110e;font-size:15px;font-weight:700;cursor:pointer;transition:opacity .2s;margin-top:6px}
+  #screen-run-btn:disabled{opacity:.45;cursor:not-allowed}
+  .prog-wrap{margin-top:18px}
+  .prog-info{display:flex;justify-content:space-between;font-size:12px;color:var(--txt-dim);margin-bottom:7px}
+  .prog-bar{height:6px;background:var(--line);border-radius:3px;overflow:hidden}
+  .prog-fill{height:100%;background:var(--teal);border-radius:3px;transition:width .4s}
+  .stbl{width:100%;border-collapse:collapse;font-size:13px;margin-top:22px}
+  .stbl th{text-align:left;padding:9px 8px;color:var(--txt-mute);font-size:11px;
+    text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--line)}
+  .stbl td{padding:10px 8px;border-bottom:1px solid var(--line);vertical-align:middle}
+  .stbl tr.srow{cursor:pointer;transition:background .15s}
+  .stbl tr.srow:hover td{background:var(--panel2)}
+  .stbl tr:last-child td{border-bottom:none}
+  .stbl .tkr{font-weight:800;color:var(--teal)}
+  .stbl .nm{color:var(--txt-dim);font-size:12px}
+  .stbl .sc5{color:#fbbf24} .stbl .sc4{color:#34d399} .stbl .sc3{color:#9fb8b1}
+  .scr-hint{font-size:12px;color:var(--txt-mute);margin-top:14px;font-style:italic}
+  @media(max-width:600px){
+    .main-tabs{margin:12px 0 2px}
+    .mtab{padding:9px 16px;font-size:13px}
+    .stbl{font-size:11px}
+    .stbl th,.stbl td{padding:7px 5px}
+    .stbl .nm{display:none}
+  }
   .spin{display:inline-block;width:16px;height:16px;border:2px solid #ffffff44;border-top-color:#04110e;
     border-radius:50%;animation:sp .7s linear infinite;vertical-align:-2px}
   @keyframes sp{to{transform:rotate(360deg)}}
@@ -141,7 +186,12 @@
 
   /* ── Telegram Mini App / Mobile ─────────────────────────────────────── */
   @media(max-width:600px){
-    body{padding:14px 12px 50px;overflow-x:hidden}
+    body{
+      padding: calc(14px + env(safe-area-inset-top)) 12px calc(50px + env(safe-area-inset-bottom));
+      padding-left:  calc(12px + env(safe-area-inset-left));
+      padding-right: calc(12px + env(safe-area-inset-right));
+      overflow-x:hidden;
+    }
     h1{font-size:21px}
     .sub{font-size:12px}
     .searchbar{margin:14px 0 6px;gap:8px}
@@ -190,22 +240,70 @@
     <div class="sub">Скоринг «30 секунд» · чек-лист из 16 пунктов · квартальные отчёты</div>
   </header>
 
-  <div class="searchbar">
-    <input id="ticker" placeholder="Тикер: AAPL, MSFT, KO, BNP.PA, MC.PA…" autocomplete="off">
-    <button id="go" onclick="analyze()">Анализ</button>
-  </div>
-  <div class="hint">Данные — локально через yfinance. Европейские тикеры с суффиксом биржи (.PA, .DE, .L).</div>
-
-  <div id="history-section" style="display:none" class="chips-section">
-    <div class="chips-label">Последние</div>
-    <div class="chips" id="history-chips"></div>
-  </div>
-  <div class="chips-section">
-    <div class="chips-label">Примеры</div>
-    <div class="chips" id="example-chips"></div>
+  <div class="main-tabs">
+    <button class="mtab active" id="mtab-analyze" onclick="switchTab('analyze')">📊 Анализ</button>
+    <button class="mtab"        id="mtab-screener" onclick="switchTab('screener')">🔍 Скринер</button>
   </div>
 
-  <div id="out" style="margin-top:22px"></div>
+  <!-- ═══ ВКЛАДКА: АНАЛИЗ ═══ -->
+  <div id="tab-analyze">
+    <div class="searchbar">
+      <input id="ticker" placeholder="Тикер: AAPL, MSFT, KO, BNP.PA, MC.PA…" autocomplete="off">
+      <button id="go" onclick="analyze()">Анализ</button>
+    </div>
+    <div class="hint">Данные через yfinance. Европейские тикеры с суффиксом биржи (.PA, .DE, .L).</div>
+
+    <div id="history-section" style="display:none" class="chips-section">
+      <div class="chips-label">Последние</div>
+      <div class="chips" id="history-chips"></div>
+    </div>
+    <div class="chips-section">
+      <div class="chips-label">Примеры</div>
+      <div class="chips" id="example-chips"></div>
+    </div>
+
+    <div id="out" style="margin-top:22px"></div>
+  </div><!-- /tab-analyze -->
+
+  <!-- ═══ ВКЛАДКА: СКРИНЕР ═══ -->
+  <div id="tab-screener" style="display:none;margin-top:8px">
+
+    <div class="scr-block">
+      <div class="scr-label">Индекс</div>
+      <div class="scr-btns" id="scr-index-btns">
+        <button class="scr-btn active" data-idx="sp500"    onclick="selIdx(this)">S&amp;P 500    <span class="cnt">505</span></button>
+        <button class="scr-btn"        data-idx="nasdaq100" onclick="selIdx(this)">NASDAQ 100 <span class="cnt">100</span></button>
+        <button class="scr-btn"        data-idx="ftse100"   onclick="selIdx(this)">FTSE 100   <span class="cnt">100</span></button>
+        <button class="scr-btn"        data-idx="dax40"     onclick="selIdx(this)">DAX 40     <span class="cnt">40</span></button>
+        <button class="scr-btn"        data-idx="cac40"     onclick="selIdx(this)">CAC 40     <span class="cnt">40</span></button>
+      </div>
+    </div>
+
+    <div class="scr-block">
+      <div class="scr-label">Минимальный балл</div>
+      <div class="scr-btns" id="scr-score-btns">
+        <button class="scr-btn"        data-score="3" onclick="selScore(this)">3/5 · Больше акций</button>
+        <button class="scr-btn active" data-score="4" onclick="selScore(this)">4/5 · Рекомендуется</button>
+        <button class="scr-btn"        data-score="5" onclick="selScore(this)">5/5 · Идеальные</button>
+      </div>
+    </div>
+
+    <button id="screen-run-btn" onclick="startScreen()">🔍 Запустить скрининг</button>
+
+    <div id="screen-progress" class="prog-wrap" style="display:none">
+      <div class="prog-info">
+        <span>Сканирую… <span id="prog-done">0</span>/<span id="prog-total">—</span></span>
+        <span>Найдено: <span id="prog-found">0</span></span>
+      </div>
+      <div class="prog-bar"><div class="prog-fill" id="prog-fill" style="width:0%"></div></div>
+    </div>
+
+    <div id="screen-results"></div>
+    <div class="scr-hint" id="scr-hint" style="display:none">
+      Нажми на строку — откроется полный анализ акции с конкурентами
+    </div>
+
+  </div><!-- /tab-screener -->
 
   <footer>
     Инструмент для учебного анализа. Не является индивидуальной инвестиционной рекомендацией.<br>
@@ -795,6 +893,151 @@ function toggleManual(el) {
     el.className = 'ci manual'; ico.textContent = '?'; el.dataset.state = 'q';
   }
   updateScore();
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// ПЕРЕКЛЮЧЕНИЕ ВКЛАДОК
+// ══════════════════════════════════════════════════════════════════════════════
+function switchTab(name) {
+  document.getElementById('tab-analyze').style.display  = name === 'analyze'  ? '' : 'none';
+  document.getElementById('tab-screener').style.display = name === 'screener' ? '' : 'none';
+  document.getElementById('mtab-analyze').classList.toggle('active',  name === 'analyze');
+  document.getElementById('mtab-screener').classList.toggle('active', name === 'screener');
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// СКРИНЕР
+// ══════════════════════════════════════════════════════════════════════════════
+let _scrIdx       = 'sp500';
+let _scrMinScore  = 4;
+let _scrTaskId    = null;
+let _scrTimer     = null;
+let _scrLastCount = 0;
+
+function selIdx(btn) {
+  document.querySelectorAll('#scr-index-btns .scr-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  _scrIdx = btn.dataset.idx;
+}
+
+function selScore(btn) {
+  document.querySelectorAll('#scr-score-btns .scr-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  _scrMinScore = parseInt(btn.dataset.score);
+}
+
+async function startScreen() {
+  if (_scrTimer) clearInterval(_scrTimer);
+  _scrLastCount = 0;
+  const runBtn = document.getElementById('screen-run-btn');
+  runBtn.disabled = true;
+  runBtn.textContent = '⏳ Запускаю…';
+  document.getElementById('screen-progress').style.display = '';
+  document.getElementById('screen-results').innerHTML = '';
+  document.getElementById('scr-hint').style.display = 'none';
+  document.getElementById('prog-done').textContent  = '0';
+  document.getElementById('prog-total').textContent = '—';
+  document.getElementById('prog-found').textContent = '0';
+  document.getElementById('prog-fill').style.width  = '0%';
+
+  try {
+    const r = await fetch(API + '/api/screen/start', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({index: _scrIdx, min_score: _scrMinScore}),
+    });
+    const d = await r.json();
+    if (d.error) throw new Error(d.error);
+    _scrTaskId = d.task_id;
+    _scrTimer  = setInterval(pollScreen, 2500);
+  } catch(e) {
+    runBtn.disabled = false;
+    runBtn.textContent = '🔍 Запустить скрининг';
+    document.getElementById('screen-results').innerHTML =
+      '<div class="msg err">Ошибка запуска: ' + e.message + '</div>';
+  }
+}
+
+async function pollScreen() {
+  if (!_scrTaskId) return;
+  try {
+    const r = await fetch(API + '/api/screen/status/' + _scrTaskId);
+    const d = await r.json();
+
+    const done  = d.done  || 0;
+    const total = d.total || 0;
+    document.getElementById('prog-done').textContent  = done;
+    document.getElementById('prog-total').textContent = total || '—';
+    document.getElementById('prog-found').textContent = (d.results || []).length;
+    if (total > 0)
+      document.getElementById('prog-fill').style.width = Math.min(100, Math.round(done/total*100)) + '%';
+
+    // Обновить таблицу если появились новые результаты
+    if ((d.results || []).length !== _scrLastCount) {
+      _scrLastCount = d.results.length;
+      renderScrResults(d.results);
+    }
+
+    if (d.status === 'done' || d.status === 'error') {
+      clearInterval(_scrTimer);
+      _scrTimer = null;
+      const runBtn = document.getElementById('screen-run-btn');
+      runBtn.disabled = false;
+      runBtn.textContent = '🔍 Запустить скрининг';
+      document.getElementById('prog-fill').style.width = '100%';
+
+      if (d.status === 'error') {
+        document.getElementById('screen-results').innerHTML =
+          '<div class="msg err">Ошибка: ' + (d.error || 'неизвестная') + '</div>';
+      } else {
+        renderScrResults(d.results);
+        if ((d.results || []).length > 0)
+          document.getElementById('scr-hint').style.display = '';
+      }
+    }
+  } catch(e) { /* сетевой сбой — продолжаем попытки */ }
+}
+
+function renderScrResults(results) {
+  if (!results || !results.length) return;
+  const top = results.slice(0, 20);
+  const labelMap = {sp500:'S&P 500', nasdaq100:'NASDAQ 100', ftse100:'FTSE 100', dax40:'DAX 40', cac40:'CAC 40'};
+
+  let html = `
+  <div style="font-size:12px;color:var(--txt-mute);margin:18px 0 6px">
+    Топ-${top.length} из ${results.length} найденных · ${labelMap[_scrIdx] || _scrIdx}
+  </div>
+  <div style="overflow-x:auto">
+  <table class="stbl">
+    <thead><tr>
+      <th>#</th><th>Тикер</th><th>Компания</th><th>Балл</th>
+      <th>Рост&nbsp;выр.</th><th>P/E</th><th>PEG</th><th>ROE</th><th>Ликв.</th><th>Сектор</th>
+    </tr></thead><tbody>`;
+
+  top.forEach((r, i) => {
+    const stars = '★'.repeat(r.score) + '☆'.repeat(5 - r.score);
+    const cls   = r.score >= 5 ? 'sc5' : r.score >= 4 ? 'sc4' : 'sc3';
+    html += `<tr class="srow" onclick="analyzeFromScreen('${r.ticker}')">
+      <td style="color:var(--txt-mute)">${i+1}</td>
+      <td><span class="tkr">${r.ticker}</span></td>
+      <td><span class="nm">${r.name}</span></td>
+      <td class="${cls}">${stars}</td>
+      <td>${r.rev_g != null ? (r.rev_g > 0 ? '+' : '') + r.rev_g + '%' : '—'}</td>
+      <td>${r.pe   != null ? r.pe   : '—'}</td>
+      <td>${r.peg  != null ? r.peg  : '—'}</td>
+      <td>${r.roe  != null ? r.roe + '%' : '—'}</td>
+      <td>${r.quick!= null ? r.quick : '—'}</td>
+      <td style="font-size:11px;color:var(--txt-dim)">${r.sector || '—'}</td>
+    </tr>`;
+  });
+  html += '</tbody></table></div>';
+  document.getElementById('screen-results').innerHTML = html;
+}
+
+function analyzeFromScreen(ticker) {
+  switchTab('analyze');
+  document.getElementById('ticker').value = ticker;
+  analyze();
 }
 </script>
 </body>

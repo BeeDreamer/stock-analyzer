@@ -13,9 +13,17 @@
 """
 
 import os
+import json
+import uuid
+import threading
 import traceback
+import requests
+from io import StringIO
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
+import pandas as pd
 import yfinance as yf
-from flask import Flask, jsonify, send_from_directory, Response
+from flask import Flask, jsonify, send_from_directory, Response, request
 from flask_cors import CORS
 
 app = Flask(__name__, static_folder=".")
@@ -88,6 +96,142 @@ def index():
     return send_from_directory(".", "analyzer.html")
 
 
+# ══════════════════════════════════════════════════════════════════════════════
+# SCREENER
+# ══════════════════════════════════════════════════════════════════════════════
+
+_SCRHDR = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+
+SCREEN_CRITERIA = [
+    ("Рост выр. ≥10%", lambda d: d["rev_g"]  is not None and d["rev_g"]  >= 0.10),
+    ("P/E < 25",       lambda d: d["pe"]      is not None and d["pe"]      < 25),
+    ("PEG < 2",        lambda d: d["peg"]     is not None and d["peg"]     < 2),
+    ("ROE > 5%",       lambda d: d["roe"]     is not None and d["roe"]     > 0.05),
+    ("Ликвид. > 1.5",  lambda d: d["quick"]   is not None and d["quick"]   > 1.5),
+]
+
+_screen_tasks: dict = {}
+
+
+def _scr_get_tickers(index_name: str) -> list:
+    urls = {
+        "sp500":    "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies",
+        "nasdaq100":"https://en.wikipedia.org/wiki/Nasdaq-100",
+        "ftse100":  "https://en.wikipedia.org/wiki/FTSE_100_Index",
+        "dax40":    "https://en.wikipedia.org/wiki/DAX",
+        "cac40":    "https://en.wikipedia.org/wiki/CAC_40",
+    }
+    url = urls[index_name]
+    resp = requests.get(url, headers=_SCRHDR, timeout=20)
+    resp.raise_for_status()
+    tables = pd.read_html(StringIO(resp.text))
+
+    if index_name == "sp500":
+        return [t.replace(".", "-") for t in tables[0]["Symbol"].tolist()]
+    col_names = ("Ticker", "Symbol", "EPIC")
+    suffix = {"ftse100": ".L", "dax40": ".DE", "cac40": ".PA"}.get(index_name, "")
+    for t in tables:
+        for col in col_names:
+            if col in t.columns:
+                ticks = t[col].dropna().tolist()
+                return [str(x) + suffix for x in ticks] if suffix else ticks
+    return []
+
+
+def _scr_fetch_one(ticker: str) -> dict | None:
+    try:
+        info = yf.Ticker(ticker).info or {}
+        price = info.get("currentPrice") or info.get("regularMarketPrice")
+        if not price:
+            return None
+        rev_g = info.get("revenueGrowth")
+        pe    = info.get("trailingPE")
+        peg   = info.get("pegRatio") or info.get("trailingPegRatio")
+        roe   = info.get("returnOnEquity")
+        quick = info.get("quickRatio") or info.get("currentRatio")
+        div_y = info.get("dividendYield")
+        if div_y and div_y > 0.5:
+            div_y /= 100.0
+
+        d = dict(rev_g=rev_g, pe=pe, peg=peg, roe=roe, quick=quick)
+        checks = [fn(d) for _, fn in SCREEN_CRITERIA]
+        score  = sum(checks)
+
+        return {
+            "ticker":  ticker,
+            "name":    (info.get("longName") or info.get("shortName") or ticker)[:40],
+            "sector":  info.get("sector", ""),
+            "price":   round(float(price), 2),
+            "currency":info.get("currency", "USD"),
+            "mcap_b":  round(info.get("marketCap", 0) / 1e9, 1),
+            "rev_g":   round(rev_g * 100, 1) if rev_g is not None else None,
+            "pe":      round(pe,    1)        if pe    is not None else None,
+            "peg":     round(peg,   2)        if peg   is not None else None,
+            "roe":     round(roe   * 100, 1)  if roe   is not None else None,
+            "quick":   round(quick, 2)        if quick is not None else None,
+            "div_y":   round(div_y * 100, 2)  if div_y else 0,
+            "score":   score,
+            "checks":  checks,
+        }
+    except Exception:
+        return None
+
+
+def _scr_run_task(task_id: str, index_name: str, min_score: int):
+    task = _screen_tasks[task_id]
+    try:
+        tickers = _scr_get_tickers(index_name)
+        if not tickers:
+            task["status"] = "error"
+            task["error"]  = "Не удалось загрузить список тикеров"
+            return
+        task["total"]  = len(tickers)
+        task["status"] = "running"
+
+        with ThreadPoolExecutor(max_workers=20) as ex:
+            futs = {ex.submit(_scr_fetch_one, t): t for t in tickers}
+            for fut in as_completed(futs):
+                task["done"] += 1
+                row = fut.result()
+                if row and row["score"] >= min_score:
+                    task["results"].append(row)
+                    task["results"].sort(key=lambda x: (-x["score"], -(x["rev_g"] or 0)))
+                    task["results"] = task["results"][:50]
+
+        task["status"] = "done"
+    except Exception as e:
+        traceback.print_exc()
+        task["status"] = "error"
+        task["error"]  = str(e)
+
+
+@app.route("/api/screen/start", methods=["POST"])
+def screen_start():
+    data       = request.get_json() or {}
+    index_name = data.get("index", "sp500")
+    min_score  = int(data.get("min_score", 4))
+    if index_name not in ("sp500", "nasdaq100", "ftse100", "dax40", "cac40"):
+        return jsonify({"error": "Unknown index"}), 400
+    task_id = str(uuid.uuid4())[:8]
+    _screen_tasks[task_id] = {
+        "status": "loading", "done": 0, "total": 0,
+        "results": [], "error": None, "index": index_name,
+    }
+    threading.Thread(
+        target=_scr_run_task, args=(task_id, index_name, min_score), daemon=True
+    ).start()
+    return jsonify({"task_id": task_id})
+
+
+@app.route("/api/screen/status/<task_id>")
+def screen_status(task_id):
+    task = _screen_tasks.get(task_id)
+    if not task:
+        return jsonify({"error": "Not found"}), 404
+    return jsonify(task)
+
+
+# ──────────────────────────────────────────────────────────────────────────────
 @app.route("/manifest.json")
 def manifest():
     data = {
@@ -102,8 +246,7 @@ def manifest():
             {"src": "/icon180.png", "sizes": "180x180", "type": "image/png"},
         ],
     }
-    import json
-    return Response(json.dumps(data), mimetype="application/json")
+    return Response(json.dumps(data, ensure_ascii=False), mimetype="application/json")
 
 
 @app.route("/icon192.png")
