@@ -31,6 +31,35 @@ CORS(app)
 
 PORT = int(os.environ.get("PORT", 5001))
 
+# ---------- кэш (5 минут) ----------
+import time as _time
+_CACHE: dict = {}
+_CACHE_TTL = 300  # секунд
+
+def _cache_get(key: str):
+    entry = _CACHE.get(key)
+    if entry and _time.time() - entry[0] < _CACHE_TTL:
+        return entry[1]
+    return None
+
+def _cache_set(key: str, val):
+    _CACHE[key] = (_time.time(), val)
+
+def _yf_info(ticker: str, retries: int = 3):
+    """Получить info с retry при rate-limit."""
+    for attempt in range(retries):
+        try:
+            info = yf.Ticker(ticker).info or {}
+            if info:
+                return info
+        except Exception as e:
+            msg = str(e).lower()
+            if "rate" in msg or "429" in msg or "too many" in msg:
+                _time.sleep(2 ** attempt)   # 1 → 2 → 4 с
+            else:
+                raise
+    return {}
+
 
 # ---------- helpers ----------
 def g(info, *keys):
@@ -201,7 +230,7 @@ def _scr_run_task(task_id: str, index_name: str, min_score: int):
         task["total"]  = len(tickers)
         task["status"] = "running"
 
-        with ThreadPoolExecutor(max_workers=20) as ex:
+        with ThreadPoolExecutor(max_workers=8) as ex:
             futs = {ex.submit(_scr_fetch_one, t): t for t in tickers}
             for fut in as_completed(futs):
                 task["done"] += 1
@@ -285,9 +314,13 @@ self.addEventListener('fetch', function(event) {
 @app.route("/api/analyze/<ticker>")
 def analyze(ticker):
     ticker = ticker.strip().upper()
+    # Возвращаем из кэша если свежий
+    cached = _cache_get(f"analyze:{ticker}")
+    if cached:
+        return jsonify(cached)
     try:
-        tk = yf.Ticker(ticker)
-        info = tk.info or {}
+        tk   = yf.Ticker(ticker)
+        info = _yf_info(ticker)
         if not info or info.get("regularMarketPrice") is None and info.get("currentPrice") is None:
             return jsonify({"error": "Нет данных по тикеру"}), 404
 
@@ -349,15 +382,50 @@ def analyze(ticker):
             "industry": industry,
             "dividendRate": dividend_rate,
             "payoutRatio": payout_ratio,
-            "recommendation": g(info, "recommendationKey"),
+            "recommendation":       g(info, "recommendationKey"),
+            "recommendationMean":   g(info, "recommendationMean"),
+            "numberOfAnalysts":     g(info, "numberOfAnalystOpinions"),
+            "targetMeanPrice":      g(info, "targetMeanPrice"),
+            "targetHighPrice":      g(info, "targetHighPrice"),
+            "targetLowPrice":       g(info, "targetLowPrice"),
+            "targetMedianPrice":    g(info, "targetMedianPrice"),
             "quarters": quarters,
             "beats": beats,
             "quartersCount": len(quarters),
         }
+        _cache_set(f"analyze:{ticker}", data)
         return jsonify(data)
     except Exception as e:
         traceback.print_exc()
-        return jsonify({"error": str(e)}), 500
+        msg = str(e)
+        if "rate" in msg.lower() or "429" in msg or "too many" in msg.lower():
+            msg = "Yahoo Finance ограничил запросы — подождите 30–60 секунд и попробуйте снова."
+        return jsonify({"error": msg}), 500
+
+
+@app.route("/api/news/<ticker>")
+def news(ticker):
+    ticker = ticker.strip().upper()
+    try:
+        items = yf.Ticker(ticker).news or []
+        result = []
+        for n in items[:6]:
+            ts = n.get("providerPublishTime") or n.get("published") or 0
+            # Новый формат yfinance возвращает вложенный объект content
+            content = n.get("content", {})
+            title = (content.get("title") or n.get("title") or "").strip()
+            link  = (content.get("canonicalUrl", {}).get("url")
+                     or content.get("clickThroughUrl", {}).get("url")
+                     or n.get("link") or n.get("url") or "")
+            pub   = (content.get("provider", {}) or {}).get("displayName") or n.get("publisher") or ""
+            if not title:
+                continue
+            result.append({"title": title, "link": link,
+                           "publisher": pub, "time": ts})
+        return jsonify(result)
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify([])
 
 
 @app.route("/api/chart/<ticker>/<period>")
@@ -380,7 +448,7 @@ def chart_data(ticker, period):
         tk = yf.Ticker(ticker)
         hist = tk.history(period=p, interval=ivl)
         if hist.empty:
-            return jsonify({"error": "Net istoricheskikh dannykh"}), 404
+            return jsonify({"error": "No historical data"}), 404
         data = []
         for idx, row in hist.iterrows():
             data.append({
