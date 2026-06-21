@@ -1127,123 +1127,195 @@ async function runCompare() {
 }
 
 function buildCmpTable(a, b) {
-  const na = a.name || a.ticker;
-  const nb = b.name || b.ticker;
-
-  // Вычислим скор 30-секунд для каждого
-  function score30(d) {
-    let s = 0;
-    if (d.revenueGrowth != null && d.revenueGrowth >= 0.10) s++;
-    if (d.pe            != null && d.pe            < 25)   s++;
-    if (d.peg           != null && d.peg           < 2)    s++;
-    if (d.roe           != null && d.roe            > 0.05) s++;
-    if (d.quickRatio    != null && d.quickRatio     > 1.5)  s++;
-    return s;
-  }
-  const sa = score30(a), sb = score30(b);
-
-  // helper: форматирование
-  const f  = (v, d=1) => v == null ? '—' : Number(v).toLocaleString('ru-RU', {maximumFractionDigits:d});
-  const p  = (v, d=1) => v == null ? '—' : (v*100).toLocaleString('ru-RU', {maximumFractionDigits:d}) + '%';
-  const bn = v => {
+  // ── форматирование ────────────────────────────────────────────────────────
+  const f   = (v, d=1) => v == null ? '—' : Number(v).toLocaleString('ru-RU', {maximumFractionDigits:d});
+  const fp  = (v, d=1) => v == null ? '—' : (v*100).toLocaleString('ru-RU', {maximumFractionDigits:d}) + '%';
+  const chg = v => v == null ? '—' : (v>=0?'<span style="color:var(--green)">+':'<span style="color:var(--red)">') +
+                   (v*100).toFixed(2) + '%</span>';
+  const bn  = v => {
     if (v == null) return '—';
     if (Math.abs(v) >= 1e12) return (v/1e12).toFixed(1) + ' трлн';
     if (Math.abs(v) >= 1e9)  return (v/1e9).toFixed(1)  + ' млрд';
     return (v/1e6).toFixed(0) + ' млн';
   };
-  const stars = s => '<span class="cmp-score">' + '★'.repeat(s) + '<span style="opacity:.3">' + '☆'.repeat(5-s) + '</span></span>';
+  // % разница относительно B: показывает насколько A лучше/хуже
+  const delta = (va, vb, higherBetter) => {
+    if (va == null || vb == null || vb === 0) return '';
+    const pct = ((va - vb) / Math.abs(vb) * 100);
+    const better = higherBetter ? pct > 0 : pct < 0;
+    if (Math.abs(pct) < 1) return '';
+    return `<span style="font-size:10px;margin-left:4px;color:${better?'var(--green)':'var(--red)'}">${pct>0?'+':''}${pct.toFixed(0)}%</span>`;
+  };
 
-  // Строки: [метка, значA, значB, лучше: 'high'|'low'|null]
-  const rows = [
-    ['sep', '📈 Цена и рынок'],
-    ['Цена',         a.price + ' ' + (a.currency||''), b.price + ' ' + (b.currency||''), null],
-    ['Изм. за день', (a.changePercent!=null?(a.changePercent>=0?'+':'')+(a.changePercent*100).toFixed(2)+'%':'—'),
-                     (b.changePercent!=null?(b.changePercent>=0?'+':'')+(b.changePercent*100).toFixed(2)+'%':'—'), 'high'],
-    ['Капитализация', bn(a.marketCap), bn(b.marketCap), null],
-    ['Тип',          a.capClass||'—', b.capClass||'—', null],
-
-    ['sep', '📊 Оценка'],
-    ['P/E',          f(a.pe),     f(b.pe),     'low'],
-    ['Forward P/E',  f(a.forwardPe), f(b.forwardPe), 'low'],
-    ['PEG',          f(a.peg,2),  f(b.peg,2),  'low'],
-    ['Beta',         f(a.beta,2), f(b.beta,2), 'low'],
-
-    ['sep', '💰 Качество бизнеса'],
-    ['Рост выручки', p(a.revenueGrowth), p(b.revenueGrowth), 'high'],
-    ['Рост прибыли', p(a.earningsGrowth), p(b.earningsGrowth), 'high'],
-    ['Маржа',        p(a.profitMargin),   p(b.profitMargin),   'high'],
-    ['ROE',          p(a.roe),            p(b.roe),            'high'],
-    ['ROA',          p(a.roaAssets),      p(b.roaAssets),      'high'],
-
-    ['sep', '🛡 Финансовое здоровье'],
-    ['Ликвидность',  f(a.quickRatio,2),   f(b.quickRatio,2),   'high'],
-    ['Тек. ликв.',   f(a.currentRatio,2), f(b.currentRatio,2), 'high'],
-    ['D/E',          f(a.debtToEquity,1), f(b.debtToEquity,1), 'low'],
-
-    ['sep', '💸 Дивиденды'],
-    ['Дивиденд',     a.dividendYield!=null ? p(a.dividendYield) : '—',
-                     b.dividendYield!=null ? p(b.dividendYield) : '—', 'high'],
-
-    ['sep', '⭐ Скоринг «30 секунд»'],
-    ['Балл',         stars(sa), stars(sb), 'high_num', sa, sb],
+  // ── критерии «30 секунд» ──────────────────────────────────────────────────
+  const criteria = [
+    { lbl:'Рост выручки ≥ 10%', va: a.revenueGrowth, vb: b.revenueGrowth,
+      fmt: v => fp(v,1), pass: v => v!=null && v>=0.10, higher: true },
+    { lbl:'P/E < 25',           va: a.pe,            vb: b.pe,
+      fmt: v => f(v,1),  pass: v => v!=null && v<25,   higher: false },
+    { lbl:'PEG < 2',            va: a.peg,           vb: b.peg,
+      fmt: v => f(v,2),  pass: v => v!=null && v<2,    higher: false },
+    { lbl:'ROE > 5%',           va: a.roe,           vb: b.roe,
+      fmt: v => fp(v,1), pass: v => v!=null && v>0.05, higher: true },
+    { lbl:'Ликвидность > 1.5',  va: a.quickRatio,    vb: b.quickRatio,
+      fmt: v => f(v,2),  pass: v => v!=null && v>1.5,  higher: true },
   ];
 
-  let html = `<div style="overflow-x:auto"><table class="cmptbl">
+  let scoreA = 0, scoreB = 0;
+  let winsA = 0, winsB = 0;  // счётчик побед по всем метрикам
+
+  // ── helper: ячейка с победителем ────────────────────────────────────────────
+  function cell(va, vb, higher, fmtFn) {
+    let clsA = '', clsB = '', dlt = '';
+    if (va != null && vb != null && va !== vb) {
+      const aWins = higher ? va > vb : va < vb;
+      clsA = aWins ? 'win' : 'lose';
+      clsB = aWins ? 'lose' : 'win';
+      dlt = delta(va, vb, higher);
+      if (aWins) winsA++; else winsB++;
+    }
+    return { a: `<span class="${clsA}">${fmtFn(va)}${clsA==='win'?dlt:''}</span>`,
+             b: `<span class="${clsB}">${fmtFn(vb)}${clsB==='win'?dlt:''}</span>` };
+  }
+
+  // ── строки таблицы ────────────────────────────────────────────────────────
+  function row(lbl, va, vb, higher, fmtFn) {
+    const c = cell(va, vb, higher, fmtFn);
+    return `<tr><td class="lbl">${lbl}</td><td class="va">${c.a}</td><td class="vb">${c.b}</td></tr>`;
+  }
+  function sep(title) {
+    return `<tr class="sep"><td colspan="3">${title}</td></tr>`;
+  }
+
+  // ── карточки компаний ─────────────────────────────────────────────────────
+  let html = `
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
+    <div class="card" style="border-top:3px solid #3b6ea5">
+      <div style="font-size:11px;color:#7ab0e8;font-weight:700;margin-bottom:6px">🔵 ${a.ticker}</div>
+      <div style="font-size:15px;font-weight:800;line-height:1.3">${(a.name||a.ticker).replace(/(.{22}).+/,'$1…')}</div>
+      <div style="font-size:20px;font-weight:800;margin-top:8px">${f(a.price,2)} <span style="font-size:13px;color:var(--txt-mute)">${a.currency||''}</span></div>
+      <div style="font-size:12px;margin-top:2px">${chg(a.changePercent)}</div>
+      <div style="font-size:11px;color:var(--txt-mute);margin-top:8px">${a.sector||'—'}</div>
+      <div style="font-size:11px;color:var(--txt-dim)">${a.capClass||''} · ${bn(a.marketCap)}</div>
+    </div>
+    <div class="card" style="border-top:3px solid #7a3b9e">
+      <div style="font-size:11px;color:#b07ae8;font-weight:700;margin-bottom:6px">🟣 ${b.ticker}</div>
+      <div style="font-size:15px;font-weight:800;line-height:1.3">${(b.name||b.ticker).replace(/(.{22}).+/,'$1…')}</div>
+      <div style="font-size:20px;font-weight:800;margin-top:8px">${f(b.price,2)} <span style="font-size:13px;color:var(--txt-mute)">${b.currency||''}</span></div>
+      <div style="font-size:12px;margin-top:2px">${chg(b.changePercent)}</div>
+      <div style="font-size:11px;color:var(--txt-mute);margin-top:8px">${b.sector||'—'}</div>
+      <div style="font-size:11px;color:var(--txt-dim)">${b.capClass||''} · ${bn(b.marketCap)}</div>
+    </div>
+  </div>
+
+  <div style="overflow-x:auto"><table class="cmptbl">
     <thead><tr>
-      <th style="text-align:left">Метрика</th>
+      <th style="text-align:left;width:38%">Метрика</th>
       <th class="ha" style="text-align:right">🔵 ${a.ticker}</th>
       <th class="hb" style="text-align:right">🟣 ${b.ticker}</th>
     </tr></thead><tbody>`;
 
-  rows.forEach(row => {
-    if (row[0] === 'sep') {
-      html += `<tr class="sep"><td colspan="3">${row[1]}</td></tr>`;
-      return;
-    }
-    const [lbl, va, vb, dir, rawA, rawB] = row;
+  // ── 1. Критерии «30 секунд» с реальными значениями ───────────────────────
+  html += sep('⏱ Критерии «30 секунд» — значение + порог');
+  criteria.forEach(cr => {
+    const pa = cr.pass(cr.va), pb = cr.pass(cr.vb);
+    if (pa) scoreA++; if (pb) scoreB++;
+    const tickA = pa ? '✓' : '✗';
+    const tickB = pb ? '✓' : '✗';
+    const colA  = pa ? 'var(--green)' : 'var(--red)';
+    const colB  = pb ? 'var(--green)' : 'var(--red)';
 
-    // Определим победителя
-    let clsA = '', clsB = '';
-    if (dir && dir !== 'high_num') {
-      const numA = parseFloat(String(va).replace(/[^0-9.,-]/g,'').replace(',','.'));
-      const numB = parseFloat(String(vb).replace(/[^0-9.,-]/g,'').replace(',','.'));
-      if (!isNaN(numA) && !isNaN(numB) && numA !== numB) {
-        const aWins = dir === 'high' ? numA > numB : numA < numB;
-        clsA = aWins ? 'win' : 'lose';
-        clsB = aWins ? 'lose' : 'win';
-      }
-    } else if (dir === 'high_num' && rawA != null && rawB != null) {
-      clsA = rawA > rawB ? 'win' : rawA < rawB ? 'lose' : '';
-      clsB = rawB > rawA ? 'win' : rawB < rawA ? 'lose' : '';
+    // Даже если оба не прошли — выделяем у кого значение лучше
+    let betterA = '', betterB = '';
+    if (cr.va != null && cr.vb != null && cr.va !== cr.vb) {
+      const aNum = cr.higher ? cr.va > cr.vb : cr.va < cr.vb;
+      betterA = aNum ? ' ↑' : ''; betterB = aNum ? '' : ' ↑';
+      if (aNum) winsA++; else winsB++;
     }
 
     html += `<tr>
-      <td class="lbl">${lbl}</td>
-      <td class="va ${clsA}">${va}</td>
-      <td class="vb ${clsB}">${vb}</td>
+      <td class="lbl">${cr.lbl}</td>
+      <td class="va"><span style="color:${colA};font-weight:700">${tickA}</span>
+        <span style="margin-left:6px">${cr.fmt(cr.va)}</span>
+        <span style="color:var(--teal);font-size:11px">${betterA}</span></td>
+      <td class="vb"><span style="color:${colB};font-weight:700">${tickB}</span>
+        <span style="margin-left:6px">${cr.fmt(cr.vb)}</span>
+        <span style="color:var(--teal);font-size:11px">${betterB}</span></td>
     </tr>`;
   });
 
+  // Итог «30 секунд»
+  const s30cls = (sa, sb) => sa > sb ? 'win' : sa < sb ? 'lose' : '';
+  html += `<tr style="background:var(--panel2)">
+    <td class="lbl" style="font-weight:700">Итого</td>
+    <td class="va"><span class="${s30cls(scoreA,scoreB)}" style="font-size:16px;font-weight:800">${scoreA}/5</span></td>
+    <td class="vb"><span class="${s30cls(scoreB,scoreA)}" style="font-size:16px;font-weight:800">${scoreB}/5</span></td>
+  </tr>`;
+
+  // ── 2. Оценка ─────────────────────────────────────────────────────────────
+  html += sep('📊 Оценка');
+  html += row('P/E (тек.)',      a.pe,         b.pe,         false, v=>f(v,1));
+  html += row('P/E (форвард.)',  a.forwardPe,  b.forwardPe,  false, v=>f(v,1));
+  html += row('PEG',            a.peg,        b.peg,        false, v=>f(v,2));
+  html += row('Beta',           a.beta,       b.beta,       false, v=>f(v,2));
+
+  // ── 3. Рост и прибыльность ────────────────────────────────────────────────
+  html += sep('💰 Рост и прибыльность');
+  html += row('Рост выручки',   a.revenueGrowth,  b.revenueGrowth,  true, v=>fp(v,1));
+  html += row('Рост прибыли',   a.earningsGrowth, b.earningsGrowth, true, v=>fp(v,1));
+  html += row('Маржа прибыли',  a.profitMargin,   b.profitMargin,   true, v=>fp(v,1));
+  html += row('ROE',            a.roe,            b.roe,            true, v=>fp(v,1));
+  html += row('ROA',            a.roaAssets,      b.roaAssets,      true, v=>fp(v,1));
+  html += row('EPS',            a.eps,            b.eps,            true, v=>f(v,2));
+
+  // ── 4. Финансовое здоровье ───────────────────────────────────────────────
+  html += sep('🛡 Финансовое здоровье');
+  html += row('Ликвидность',    a.quickRatio,    b.quickRatio,    true,  v=>f(v,2));
+  html += row('Тек. ликвидность',a.currentRatio, b.currentRatio,  true,  v=>f(v,2));
+  html += row('D/E',            a.debtToEquity,  b.debtToEquity,  false, v=>f(v,1));
+
+  // ── 5. Дивиденды ─────────────────────────────────────────────────────────
+  html += sep('💸 Дивиденды');
+  html += row('Доходность',     a.dividendYield, b.dividendYield, true, v=>fp(v,2));
+  html += row('Выплата / год',  a.dividendRate,  b.dividendRate,  true, v=>f(v,2));
+  html += row('Payout ratio',   a.payoutRatio,   b.payoutRatio,   false,v=>fp(v,1));
+
+  // ── 6. Квартальные отчёты ────────────────────────────────────────────────
+  const bA = a.beats??0, bB = b.beats??0, qA = a.quartersCount??0, qB = b.quartersCount??0;
+  html += sep('📋 Квартальные отчёты');
+  const beatsCell = cell(bA, bB, true, v=>`${v}/${qA||4} кв.`);
+  html += `<tr><td class="lbl">Побил прогноз</td><td class="va">${beatsCell.a}</td><td class="vb">${beatsCell.b}</td></tr>`;
+
   html += '</tbody></table></div>';
 
-  // Итоговый вердикт
-  const winA = sa > sb, winB = sb > sa;
-  html += `<div class="card" style="margin-top:18px;text-align:center">
-    <div style="font-size:13px;color:var(--txt-mute);margin-bottom:8px">Балл «30 секунд»</div>
-    <div style="font-size:20px;font-weight:800">
-      <span style="color:${winA?'var(--green)':'var(--txt-dim)'}">${a.ticker} ${stars(sa)}</span>
-      &nbsp;vs&nbsp;
-      <span style="color:${winB?'var(--green)':'var(--txt-dim)'}">${b.ticker} ${stars(sb)}</span>
+  // ── Итоговый вердикт ──────────────────────────────────────────────────────
+  const totalWins = winsA + winsB;
+  const pctA = totalWins ? Math.round(winsA/totalWins*100) : 50;
+  const pctB = 100 - pctA;
+  const overallWinner = winsA > winsB ? a.ticker : winsA < winsB ? b.ticker : null;
+
+  html += `<div class="card" style="margin-top:18px">
+    <div style="font-size:12px;color:var(--txt-mute);margin-bottom:14px;text-align:center">
+      Победы по метрикам (${totalWins} сравнений)
     </div>
-    ${winA||winB ? `<div style="margin-top:10px;color:var(--green);font-weight:700">
-      Преимущество: ${winA ? '🔵 '+a.ticker : '🟣 '+b.ticker}</div>` :
-      `<div style="margin-top:10px;color:var(--amber)">Одинаковый балл</div>`}
-    <div style="margin-top:12px;display:flex;gap:10px;justify-content:center;flex-wrap:wrap">
-      <button class="scr-btn" onclick="switchTab('analyze');document.getElementById('ticker').value='${a.ticker}';analyze()">
-        Открыть ${a.ticker} →
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+      <span style="font-size:13px;font-weight:800;color:#7ab0e8;white-space:nowrap">🔵 ${a.ticker} ${winsA}</span>
+      <div style="flex:1;height:10px;background:var(--line);border-radius:5px;overflow:hidden">
+        <div style="height:100%;width:${pctA}%;background:linear-gradient(90deg,#3b6ea5,#7a3b9e);border-radius:5px"></div>
+      </div>
+      <span style="font-size:13px;font-weight:800;color:#b07ae8;white-space:nowrap">${winsB} 🟣 ${b.ticker}</span>
+    </div>
+    ${overallWinner
+      ? `<div style="text-align:center;color:var(--green);font-weight:700;font-size:15px">
+          Преимущество: ${winsA>winsB?'🔵':'🟣'} ${overallWinner} (${Math.max(pctA,pctB)}% побед)
+         </div>`
+      : `<div style="text-align:center;color:var(--amber);font-weight:700">Равный счёт</div>`}
+    <div style="display:flex;gap:10px;margin-top:14px;flex-wrap:wrap">
+      <button class="scr-btn" style="flex:1" onclick="switchTab('analyze');document.getElementById('ticker').value='${a.ticker}';analyze()">
+        Полный анализ ${a.ticker} →
       </button>
-      <button class="scr-btn" onclick="switchTab('analyze');document.getElementById('ticker').value='${b.ticker}';analyze()">
-        Открыть ${b.ticker} →
+      <button class="scr-btn" style="flex:1" onclick="switchTab('analyze');document.getElementById('ticker').value='${b.ticker}';analyze()">
+        Полный анализ ${b.ticker} →
       </button>
     </div>
   </div>`;
