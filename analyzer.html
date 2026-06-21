@@ -174,10 +174,43 @@
   .scr-hint{font-size:12px;color:var(--txt-mute);margin-top:14px;font-style:italic}
   @media(max-width:600px){
     .main-tabs{margin:12px 0 2px}
-    .mtab{padding:9px 16px;font-size:13px}
+    .mtab{padding:9px 12px;font-size:12px}
     .stbl{font-size:11px}
     .stbl th,.stbl td{padding:7px 5px}
     .stbl .nm{display:none}
+  }
+
+  /* ── Сравнение ───────────────────────────────────────────────────────── */
+  .cmp-inputs{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px}
+  .cmp-input-wrap{display:flex;flex-direction:column;gap:6px}
+  .cmp-label{font-size:11px;text-transform:uppercase;letter-spacing:.8px;color:var(--txt-mute);font-weight:600}
+  .cmp-input{background:var(--panel);border:2px solid var(--line);border-radius:var(--r);
+    padding:12px 14px;color:var(--txt);font-size:15px;font-weight:700;text-transform:uppercase;
+    outline:none;width:100%;transition:border-color .2s}
+  .cmp-input:focus{border-color:var(--teal)}
+  .cmp-input.a{border-color:#3b6ea5} .cmp-input.b{border-color:#7a3b9e}
+  #cmp-run-btn{width:100%;background:var(--teal);border:none;border-radius:var(--r);
+    padding:13px;color:#04110e;font-size:15px;font-weight:700;cursor:pointer;
+    transition:opacity .2s;margin-bottom:20px}
+  #cmp-run-btn:disabled{opacity:.45;cursor:not-allowed}
+
+  .cmptbl{width:100%;border-collapse:collapse;font-size:13px}
+  .cmptbl th{padding:10px 12px;font-size:11px;text-transform:uppercase;letter-spacing:.5px;
+    color:var(--txt-mute);border-bottom:2px solid var(--line);font-weight:600}
+  .cmptbl th.ha{background:#0d1f38;color:#7ab0e8;border-radius:8px 0 0 0}
+  .cmptbl th.hb{background:#1e0d38;color:#b07ae8;border-radius:0 8px 0 0}
+  .cmptbl td{padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:middle}
+  .cmptbl td.lbl{color:var(--txt-mute);font-size:12px;white-space:nowrap}
+  .cmptbl td.va,.cmptbl td.vb{font-weight:600;font-size:14px;text-align:right}
+  .cmptbl tr.sep td{background:var(--panel2);color:var(--teal);font-size:11px;
+    text-transform:uppercase;letter-spacing:.8px;padding:7px 12px;font-weight:700}
+  .cmptbl td.win{color:var(--green)} .cmptbl td.lose{color:var(--txt-dim);opacity:.6}
+  .cmptbl tr:last-child td{border-bottom:none}
+  .cmp-score{display:inline-flex;gap:3px;font-size:15px}
+  @media(max-width:600px){
+    .cmptbl{font-size:11px}
+    .cmptbl th,.cmptbl td{padding:8px 7px}
+    .cmptbl td.va,.cmptbl td.vb{font-size:12px}
   }
   .spin{display:inline-block;width:16px;height:16px;border:2px solid #ffffff44;border-top-color:#04110e;
     border-radius:50%;animation:sp .7s linear infinite;vertical-align:-2px}
@@ -241,8 +274,9 @@
   </header>
 
   <div class="main-tabs">
-    <button class="mtab active" id="mtab-analyze" onclick="switchTab('analyze')">📊 Анализ</button>
+    <button class="mtab active" id="mtab-analyze"  onclick="switchTab('analyze')">📊 Анализ</button>
     <button class="mtab"        id="mtab-screener" onclick="switchTab('screener')">🔍 Скринер</button>
+    <button class="mtab"        id="mtab-compare"  onclick="switchTab('compare')">⚖️ Сравнение</button>
   </div>
 
   <!-- ═══ ВКЛАДКА: АНАЛИЗ ═══ -->
@@ -304,6 +338,29 @@
     </div>
 
   </div><!-- /tab-screener -->
+
+  <!-- ═══ ВКЛАДКА: СРАВНЕНИЕ ═══ -->
+  <div id="tab-compare" style="display:none;margin-top:8px">
+
+    <div class="cmp-inputs">
+      <div class="cmp-input-wrap">
+        <div class="cmp-label">🔵 Акция A</div>
+        <input class="cmp-input a" id="cmp-a" placeholder="AAPL" autocomplete="off"
+               oninput="this.value=this.value.toUpperCase()"
+               onkeydown="if(event.key==='Enter')runCompare()">
+      </div>
+      <div class="cmp-input-wrap">
+        <div class="cmp-label">🟣 Акция B</div>
+        <input class="cmp-input b" id="cmp-b" placeholder="MSFT" autocomplete="off"
+               oninput="this.value=this.value.toUpperCase()"
+               onkeydown="if(event.key==='Enter')runCompare()">
+      </div>
+    </div>
+
+    <button id="cmp-run-btn" onclick="runCompare()">⚖️ Сравнить</button>
+    <div id="cmp-out"></div>
+
+  </div><!-- /tab-compare -->
 
   <footer>
     Инструмент для учебного анализа. Не является индивидуальной инвестиционной рекомендацией.<br>
@@ -899,10 +956,10 @@ function toggleManual(el) {
 // ПЕРЕКЛЮЧЕНИЕ ВКЛАДОК
 // ══════════════════════════════════════════════════════════════════════════════
 function switchTab(name) {
-  document.getElementById('tab-analyze').style.display  = name === 'analyze'  ? '' : 'none';
-  document.getElementById('tab-screener').style.display = name === 'screener' ? '' : 'none';
-  document.getElementById('mtab-analyze').classList.toggle('active',  name === 'analyze');
-  document.getElementById('mtab-screener').classList.toggle('active', name === 'screener');
+  ['analyze','screener','compare'].forEach(t => {
+    document.getElementById('tab-' + t).style.display = name === t ? '' : 'none';
+    document.getElementById('mtab-' + t).classList.toggle('active', name === t);
+  });
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -1038,6 +1095,160 @@ function analyzeFromScreen(ticker) {
   switchTab('analyze');
   document.getElementById('ticker').value = ticker;
   analyze();
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// СРАВНЕНИЕ ДВУХ АКЦИЙ
+// ══════════════════════════════════════════════════════════════════════════════
+async function runCompare() {
+  const ta = document.getElementById('cmp-a').value.trim().toUpperCase();
+  const tb = document.getElementById('cmp-b').value.trim().toUpperCase();
+  const out = document.getElementById('cmp-out');
+  if (!ta || !tb) { out.innerHTML = '<div class="msg">Введите два тикера.</div>'; return; }
+  if (ta === tb)  { out.innerHTML = '<div class="msg">Введите разные тикеры.</div>'; return; }
+
+  const btn = document.getElementById('cmp-run-btn');
+  btn.disabled = true; btn.innerHTML = '<span class="spin"></span>';
+  out.innerHTML = '<div class="msg">Загружаю ' + ta + ' и ' + tb + '…</div>';
+
+  try {
+    const [ra, rb] = await Promise.all([
+      fetch(API + '/api/analyze/' + encodeURIComponent(ta)).then(r => r.json()),
+      fetch(API + '/api/analyze/' + encodeURIComponent(tb)).then(r => r.json()),
+    ]);
+    if (ra.error) throw new Error(ta + ': ' + ra.error);
+    if (rb.error) throw new Error(tb + ': ' + rb.error);
+    out.innerHTML = buildCmpTable(ra, rb);
+  } catch(e) {
+    out.innerHTML = '<div class="msg err">' + e.message + '</div>';
+  } finally {
+    btn.disabled = false; btn.textContent = '⚖️ Сравнить';
+  }
+}
+
+function buildCmpTable(a, b) {
+  const na = a.name || a.ticker;
+  const nb = b.name || b.ticker;
+
+  // Вычислим скор 30-секунд для каждого
+  function score30(d) {
+    let s = 0;
+    if (d.revenueGrowth != null && d.revenueGrowth >= 0.10) s++;
+    if (d.pe            != null && d.pe            < 25)   s++;
+    if (d.peg           != null && d.peg           < 2)    s++;
+    if (d.roe           != null && d.roe            > 0.05) s++;
+    if (d.quickRatio    != null && d.quickRatio     > 1.5)  s++;
+    return s;
+  }
+  const sa = score30(a), sb = score30(b);
+
+  // helper: форматирование
+  const f  = (v, d=1) => v == null ? '—' : Number(v).toLocaleString('ru-RU', {maximumFractionDigits:d});
+  const p  = (v, d=1) => v == null ? '—' : (v*100).toLocaleString('ru-RU', {maximumFractionDigits:d}) + '%';
+  const bn = v => {
+    if (v == null) return '—';
+    if (Math.abs(v) >= 1e12) return (v/1e12).toFixed(1) + ' трлн';
+    if (Math.abs(v) >= 1e9)  return (v/1e9).toFixed(1)  + ' млрд';
+    return (v/1e6).toFixed(0) + ' млн';
+  };
+  const stars = s => '<span class="cmp-score">' + '★'.repeat(s) + '<span style="opacity:.3">' + '☆'.repeat(5-s) + '</span></span>';
+
+  // Строки: [метка, значA, значB, лучше: 'high'|'low'|null]
+  const rows = [
+    ['sep', '📈 Цена и рынок'],
+    ['Цена',         a.price + ' ' + (a.currency||''), b.price + ' ' + (b.currency||''), null],
+    ['Изм. за день', (a.changePercent!=null?(a.changePercent>=0?'+':'')+(a.changePercent*100).toFixed(2)+'%':'—'),
+                     (b.changePercent!=null?(b.changePercent>=0?'+':'')+(b.changePercent*100).toFixed(2)+'%':'—'), 'high'],
+    ['Капитализация', bn(a.marketCap), bn(b.marketCap), null],
+    ['Тип',          a.capClass||'—', b.capClass||'—', null],
+
+    ['sep', '📊 Оценка'],
+    ['P/E',          f(a.pe),     f(b.pe),     'low'],
+    ['Forward P/E',  f(a.forwardPe), f(b.forwardPe), 'low'],
+    ['PEG',          f(a.peg,2),  f(b.peg,2),  'low'],
+    ['Beta',         f(a.beta,2), f(b.beta,2), 'low'],
+
+    ['sep', '💰 Качество бизнеса'],
+    ['Рост выручки', p(a.revenueGrowth), p(b.revenueGrowth), 'high'],
+    ['Рост прибыли', p(a.earningsGrowth), p(b.earningsGrowth), 'high'],
+    ['Маржа',        p(a.profitMargin),   p(b.profitMargin),   'high'],
+    ['ROE',          p(a.roe),            p(b.roe),            'high'],
+    ['ROA',          p(a.roaAssets),      p(b.roaAssets),      'high'],
+
+    ['sep', '🛡 Финансовое здоровье'],
+    ['Ликвидность',  f(a.quickRatio,2),   f(b.quickRatio,2),   'high'],
+    ['Тек. ликв.',   f(a.currentRatio,2), f(b.currentRatio,2), 'high'],
+    ['D/E',          f(a.debtToEquity,1), f(b.debtToEquity,1), 'low'],
+
+    ['sep', '💸 Дивиденды'],
+    ['Дивиденд',     a.dividendYield!=null ? p(a.dividendYield) : '—',
+                     b.dividendYield!=null ? p(b.dividendYield) : '—', 'high'],
+
+    ['sep', '⭐ Скоринг «30 секунд»'],
+    ['Балл',         stars(sa), stars(sb), 'high_num', sa, sb],
+  ];
+
+  let html = `<div style="overflow-x:auto"><table class="cmptbl">
+    <thead><tr>
+      <th style="text-align:left">Метрика</th>
+      <th class="ha" style="text-align:right">🔵 ${a.ticker}</th>
+      <th class="hb" style="text-align:right">🟣 ${b.ticker}</th>
+    </tr></thead><tbody>`;
+
+  rows.forEach(row => {
+    if (row[0] === 'sep') {
+      html += `<tr class="sep"><td colspan="3">${row[1]}</td></tr>`;
+      return;
+    }
+    const [lbl, va, vb, dir, rawA, rawB] = row;
+
+    // Определим победителя
+    let clsA = '', clsB = '';
+    if (dir && dir !== 'high_num') {
+      const numA = parseFloat(String(va).replace(/[^0-9.,-]/g,'').replace(',','.'));
+      const numB = parseFloat(String(vb).replace(/[^0-9.,-]/g,'').replace(',','.'));
+      if (!isNaN(numA) && !isNaN(numB) && numA !== numB) {
+        const aWins = dir === 'high' ? numA > numB : numA < numB;
+        clsA = aWins ? 'win' : 'lose';
+        clsB = aWins ? 'lose' : 'win';
+      }
+    } else if (dir === 'high_num' && rawA != null && rawB != null) {
+      clsA = rawA > rawB ? 'win' : rawA < rawB ? 'lose' : '';
+      clsB = rawB > rawA ? 'win' : rawB < rawA ? 'lose' : '';
+    }
+
+    html += `<tr>
+      <td class="lbl">${lbl}</td>
+      <td class="va ${clsA}">${va}</td>
+      <td class="vb ${clsB}">${vb}</td>
+    </tr>`;
+  });
+
+  html += '</tbody></table></div>';
+
+  // Итоговый вердикт
+  const winA = sa > sb, winB = sb > sa;
+  html += `<div class="card" style="margin-top:18px;text-align:center">
+    <div style="font-size:13px;color:var(--txt-mute);margin-bottom:8px">Балл «30 секунд»</div>
+    <div style="font-size:20px;font-weight:800">
+      <span style="color:${winA?'var(--green)':'var(--txt-dim)'}">${a.ticker} ${stars(sa)}</span>
+      &nbsp;vs&nbsp;
+      <span style="color:${winB?'var(--green)':'var(--txt-dim)'}">${b.ticker} ${stars(sb)}</span>
+    </div>
+    ${winA||winB ? `<div style="margin-top:10px;color:var(--green);font-weight:700">
+      Преимущество: ${winA ? '🔵 '+a.ticker : '🟣 '+b.ticker}</div>` :
+      `<div style="margin-top:10px;color:var(--amber)">Одинаковый балл</div>`}
+    <div style="margin-top:12px;display:flex;gap:10px;justify-content:center;flex-wrap:wrap">
+      <button class="scr-btn" onclick="switchTab('analyze');document.getElementById('ticker').value='${a.ticker}';analyze()">
+        Открыть ${a.ticker} →
+      </button>
+      <button class="scr-btn" onclick="switchTab('analyze');document.getElementById('ticker').value='${b.ticker}';analyze()">
+        Открыть ${b.ticker} →
+      </button>
+    </div>
+  </div>`;
+
+  return html;
 }
 </script>
 </body>
