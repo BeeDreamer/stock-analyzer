@@ -1143,15 +1143,7 @@ function buildCmpTable(a, b) {
     if (Math.abs(v) >= 1e9)  return (v/1e9).toFixed(1)  + ' млрд';
     return (v/1e6).toFixed(0) + ' млн';
   };
-  // % разница: только когда оба значения положительные и разница ≤ 200%
-  const delta = (va, vb, higherBetter) => {
-    if (va == null || vb == null || vb === 0) return '';
-    if (va < 0 || vb < 0) return '';          // отрицательные — бессмыслица
-    const pct = ((va - vb) / Math.abs(vb) * 100);
-    if (Math.abs(pct) < 2 || Math.abs(pct) > 200) return '';  // слишком мало или огромная
-    const better = higherBetter ? pct > 0 : pct < 0;
-    return `<span style="font-size:10px;margin-left:4px;color:${better?'var(--green)':'var(--red)'}">${pct>0?'+':''}${pct.toFixed(0)}%</span>`;
-  };
+  const delta = () => '';  // убрано — цвет строки уже показывает победителя
 
   // ── критерии «30 секунд» ──────────────────────────────────────────────────
   const criteria = [
