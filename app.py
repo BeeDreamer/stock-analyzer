@@ -15,7 +15,7 @@
 import os
 import traceback
 import yfinance as yf
-from flask import Flask, jsonify, send_from_directory
+from flask import Flask, jsonify, send_from_directory, Response
 from flask_cors import CORS
 
 app = Flask(__name__, static_folder=".")
@@ -86,6 +86,44 @@ def build_quarters(tk):
 @app.route("/")
 def index():
     return send_from_directory(".", "analyzer.html")
+
+
+@app.route("/manifest.json")
+def manifest():
+    data = {
+        "name": "Анализатор акций",
+        "short_name": "Акции",
+        "start_url": "/",
+        "display": "standalone",
+        "background_color": "#0c1614",
+        "theme_color": "#0c1614",
+        "icons": [
+            {"src": "/icon192.png", "sizes": "192x192", "type": "image/png"},
+            {"src": "/icon180.png", "sizes": "180x180", "type": "image/png"},
+        ],
+    }
+    import json
+    return Response(json.dumps(data), mimetype="application/json")
+
+
+@app.route("/icon192.png")
+def icon192():
+    return send_from_directory(".", "icon192.png")
+
+
+@app.route("/icon180.png")
+def icon180():
+    return send_from_directory(".", "icon180.png")
+
+
+@app.route("/sw.js")
+def sw():
+    js = """
+self.addEventListener('fetch', function(event) {
+  event.respondWith(fetch(event.request));
+});
+"""
+    return Response(js, mimetype="application/javascript")
 
 
 @app.route("/api/analyze/<ticker>")

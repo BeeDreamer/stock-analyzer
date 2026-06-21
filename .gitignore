@@ -5,3 +5,4 @@ __pycache__/
 *.pdf
 .env
 start.py
+screener.py

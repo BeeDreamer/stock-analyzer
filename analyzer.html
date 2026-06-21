@@ -2,8 +2,17 @@
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Анализатор акций</title>
+
+<!-- PWA -->
+<link rel="manifest" href="/manifest.json">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Акции">
+<link rel="apple-touch-icon" href="/icon180.png">
+<meta name="theme-color" content="#0c1614">
+
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <style>
   :root{
@@ -767,6 +776,11 @@ function fmtChartLabel(isoStr, period) {
   } else if (inp) {
     // Автофокус — сразу открыть клавиатуру в Mini App
     setTimeout(() => inp.focus(), 300);
+  }
+
+  // Регистрация Service Worker для PWA
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/sw.js').catch(() => {});
   }
 })();
 
